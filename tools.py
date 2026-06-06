@@ -4,6 +4,8 @@ import json
 from typing import Callable, Dict, List, Any
 from functools import wraps
 
+import requests
+
 # 工具注册表
 _registry: Dict[str, Callable] = {}
 _schemas: List[Dict] = []
@@ -131,6 +133,139 @@ def read_file(path: str) -> str:
             return f.read()
     except UnicodeDecodeError:
         raise ValueError(f"无法读取文件（非文本文件）: {path}")
+
+
+# 常见中文城市名 → 英文名映射（Open-Meteo Geocoding 不识别部分中文名）
+_CITY_ALIASES = {
+    "纽约": "New York",
+    "伦敦": "London",
+    "旧金山": "San Francisco",
+    "洛杉矶": "Los Angeles",
+    "华盛顿": "Washington",
+    "悉尼": "Sydney",
+    "墨尔本": "Melbourne",
+    "多伦多": "Toronto",
+    "温哥华": "Vancouver",
+    "柏林": "Berlin",
+    "罗马": "Rome",
+    "莫斯科": "Moscow",
+    "首尔": "Seoul",
+    "曼谷": "Bangkok",
+    "新加坡": "Singapore",
+}
+
+
+def _geocode(city: str, language: str, country: str = "") -> list:
+    """调用 Open-Meteo Geocoding API，返回按人口降序排序的结果列表"""
+    geo_params = {"name": city, "count": 10, "language": language}
+    if country:
+        geo_params["country"] = country
+
+    resp = requests.get(
+        "https://geocoding-api.open-meteo.com/v1/search",
+        params=geo_params,
+        timeout=10,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+
+    results = data.get("results") or []
+    return sorted(results, key=lambda r: r.get("population") or 0, reverse=True)
+
+
+@register_tool(description="查询指定城市的当前天气，返回温度、湿度、风速等信息")
+def get_weather(city: str, country: str = "") -> str:
+    """查询指定城市的当前天气
+
+    Args:
+        city: 城市名称（支持中英文，如 "北京"、"Tokyo"、"New York"）
+        country: 国家名称或代码（可选，用于消歧义，如 "US"、"CN"、"日本"）
+
+    Returns:
+        天气信息字符串
+    """
+    try:
+        # 1. Geocoding: 城市名 → 经纬度
+        # 对于已知别名，直接使用英文名搜索
+        search_city = _CITY_ALIASES.get(city, city)
+
+        # 同时搜索中英文，合并去重后按人口排序，确保中英文城市名都能匹配
+        zh_results = _geocode(search_city, "zh", country)
+        en_results = _geocode(search_city, "en", country)
+
+        # 按 ID 去重，合并结果
+        seen_ids = set()
+        all_results = []
+        for r in zh_results + en_results:
+            rid = r.get("id")
+            if rid not in seen_ids:
+                seen_ids.add(rid)
+                all_results.append(r)
+
+        # 按人口降序排序
+        all_results.sort(key=lambda r: r.get("population") or 0, reverse=True)
+
+        if not all_results:
+            return f"未找到城市: {city}"
+
+        location = all_results[0]
+        latitude = location["latitude"]
+        longitude = location["longitude"]
+        location_name = location.get("name", city)
+        country_name = location.get("country", "")
+        admin1 = location.get("admin1", "")  # 省/州
+
+        # 如果有多个候选，列出供参考
+        if len(all_results) > 1:
+            candidates = [
+                f"{r.get('name', '')}, {r.get('admin1', '')}, {r.get('country', '')}"
+                for r in all_results[1:4]
+            ]
+            candidates_hint = f"（其他候选: {'; '.join(candidates)}）"
+        else:
+            candidates_hint = ""
+
+        # 2. 查询天气
+        weather_resp = requests.get(
+            "https://api.open-meteo.com/v1/forecast",
+            params={
+                "latitude": latitude,
+                "longitude": longitude,
+                "current": "temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code",
+                "timezone": "auto",
+            },
+            timeout=10,
+        )
+        weather_resp.raise_for_status()
+        weather_data = weather_resp.json()
+
+        current = weather_data.get("current", {})
+        temp = current.get("temperature_2m", "N/A")
+        humidity = current.get("relative_humidity_2m", "N/A")
+        wind_speed = current.get("wind_speed_10m", "N/A")
+        weather_code = current.get("weather_code", 0)
+
+        # WMO 天气代码 → 中文描述
+        weather_desc_map = {
+            0: "晴", 1: "大部晴", 2: "多云", 3: "阴",
+            45: "雾", 48: "雾凇", 51: "小毛毛雨", 53: "毛毛雨", 55: "大毛毛雨",
+            61: "小雨", 63: "中雨", 65: "大雨", 71: "小雪", 73: "中雪", 75: "大雪",
+            80: "阵雨", 81: "中阵雨", 82: "大阵雨", 95: "雷阵雨", 96: "冰雹雷阵雨",
+        }
+        weather_desc = weather_desc_map.get(weather_code, f"未知({weather_code})")
+
+        location_label = f"{location_name}, {admin1}, {country_name}" if admin1 else f"{location_name}, {country_name}"
+
+        return (
+            f"{location_label} {candidates_hint}\n"
+            f"天气: {weather_desc}\n"
+            f"温度: {temp}°C\n"
+            f"湿度: {humidity}%\n"
+            f"风速: {wind_speed} km/h"
+        )
+    except Exception as e:
+        return f"查询天气失败: {e}"
+
 
 @register_tool(description="写入文件内容")
 def write_file(path: str, content: str) -> str:

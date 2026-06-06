@@ -22,6 +22,7 @@ def main():
                     continue
                 
                 if user_input.lower() in ('exit', 'quit'):
+                    agent.cleanup()
                     print("再见！")
                     break
                 
@@ -30,6 +31,7 @@ def main():
                 print(response)
                 
             except KeyboardInterrupt:
+                agent.cleanup()
                 print("\n再见！")
                 break
             except Exception as e:

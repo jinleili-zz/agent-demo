@@ -1,6 +1,12 @@
 {
   "api_key": "your-deepseek-api-key",
-  "model": "deepseek-chat",
+  "model": "deepseek-v4-flash",
   "temperature": 0.7,
-  "max_tokens": 4096
+  "max_tokens": 4096,
+  "mcp_servers": {
+    "weather": {
+      "command": "uvx",
+      "args": ["--from", "openmeteo-mcp-server", "weather-server"]
+    }
+  }
 }

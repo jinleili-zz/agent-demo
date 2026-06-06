@@ -1,6 +1,7 @@
 import json
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Dict, Any
 
 
 @dataclass
@@ -12,6 +13,7 @@ class Config:
     temperature: float = 0.7
     max_tokens: int = 4096
     log_dir: str = "logs"
+    mcp_servers: Dict[str, Any] = field(default_factory=dict)
 
 
 def load_config(config_path: str = "config.json") -> Config:
@@ -43,5 +45,6 @@ def load_config(config_path: str = "config.json") -> Config:
         model=data.get('model', Config.model),
         temperature=data.get('temperature', Config.temperature),
         max_tokens=data.get('max_tokens', Config.max_tokens),
-        log_dir=data.get('log_dir', Config.log_dir)
+        log_dir=data.get('log_dir', Config.log_dir),
+        mcp_servers=data.get('mcp_servers', {})
     )
