@@ -1,3 +1,4 @@
+import inspect
 import os
 import json
 from typing import Callable, Dict, List, Any
@@ -21,7 +22,6 @@ def register_tool(description: str = ""):
         _registry[tool_name] = func
         
         # 生成 OpenAI 格式的工具 schema
-        import inspect
         sig = inspect.signature(func)
         properties = {}
         required = []
@@ -84,26 +84,27 @@ def execute_tool(name: str, arguments: Dict[str, Any]) -> Any:
 
 def _validate_path(path: str) -> str:
     """验证文件路径，确保在工作目录内
-    
+
     Args:
         path: 文件路径
-        
+
     Returns:
         规范化后的绝对路径
-        
+
     Raises:
         ValueError: 路径不在工作目录内
     """
-    # Get the workspace root (current working directory)
-    workspace = os.path.abspath(os.getcwd())
-    
-    # Normalize the path
-    normalized_path = os.path.abspath(os.path.expanduser(path))
-    
-    # Check if the path is within the workspace
-    if not normalized_path.startswith(workspace):
+    workspace = os.path.realpath(os.getcwd())
+    normalized_path = os.path.realpath(os.path.expanduser(path))
+
+    try:
+        common = os.path.commonpath([workspace, normalized_path])
+    except ValueError:
         raise ValueError(f"路径不在工作目录内: {path}")
-    
+
+    if common != workspace:
+        raise ValueError(f"路径不在工作目录内: {path}")
+
     return normalized_path
 
 @register_tool(description="读取文件内容")
@@ -121,12 +122,15 @@ def read_file(path: str) -> str:
         FileNotFoundError: 文件不存在
     """
     abs_path = _validate_path(path)
-    
+
     if not os.path.exists(abs_path):
         raise FileNotFoundError(f"文件不存在: {path}")
-    
-    with open(abs_path, 'r', encoding='utf-8') as f:
-        return f.read()
+
+    try:
+        with open(abs_path, 'r', encoding='utf-8') as f:
+            return f.read()
+    except UnicodeDecodeError:
+        raise ValueError(f"无法读取文件（非文本文件）: {path}")
 
 @register_tool(description="写入文件内容")
 def write_file(path: str, content: str) -> str:

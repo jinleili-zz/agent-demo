@@ -66,12 +66,12 @@ class Agent:
                 )
                 response.raise_for_status()
                 data = response.json()
-                
+
                 # 记录响应
                 self.logger.log_response(data)
-                
+
                 return data
-            except requests.RequestException as e:
+            except (requests.RequestException, ValueError) as e:
                 if attempt == max_retries - 1:
                     self.logger.log_error(e)
                     raise
@@ -116,7 +116,7 @@ class Agent:
             模型回复文本
         """
         messages = [
-            {"role": "system", "content": "你是一个 helpful 的助手，可以使用工具帮助用户完成任务。"},
+            {"role": "system", "content": "你是一个有帮助的助手，可以使用工具帮助用户完成任务。"},
             {"role": "user", "content": user_input}
         ]
         
