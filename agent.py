@@ -1,4 +1,5 @@
 import json
+import re
 import time
 from typing import List, Dict, Any, Optional
 
@@ -6,7 +7,7 @@ import requests
 
 from config import Config
 from logger import AgentLogger
-from tools import get_tools_schema, execute_tool
+from tools import get_tools_schema, execute_tool, _geocode
 from mcp_client import MCPClientManager
 
 
@@ -111,10 +112,31 @@ class Agent:
         """
         # 检查是否是 MCP 工具（以 server__ 前缀标识）
         if "__" in tool_name and self.mcp_manager:
+            # MCP 不支持中文城市名，自动转换
+            self._translate_location(arguments)
             return self.mcp_manager.call_tool(tool_name, arguments)
 
         # 本地工具
         return execute_tool(tool_name, arguments)
+
+    @staticmethod
+    def _translate_location(arguments: Dict[str, Any]) -> None:
+        """将 MCP 工具参数中的中文城市名转换为英文"""
+        location = arguments.get("location")
+        if not location or not isinstance(location, str):
+            return
+
+        # 检测是否包含中文字符
+        if not re.search(r"[\u4e00-\u9fff]", location):
+            return
+
+        try:
+            results = _geocode(location, language="en")
+            if results:
+                arguments["location"] = results[0].get("name", location)
+                print(f"[Agent] 城市名转换: {location} → {arguments['location']}")
+        except Exception as e:
+            print(f"[Agent] 城市名转换失败: {e}")
 
     def _handle_tool_calls(self, tool_calls: List[Dict], messages: List[Dict[str, Any]]) -> None:
         """处理工具调用
