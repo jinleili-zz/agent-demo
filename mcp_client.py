@@ -90,7 +90,9 @@ class MCPClientManager:
             prefixed_name = f"{server_name}__{tool.name}"
             self._tool_map[prefixed_name] = server_name
 
-        print(f"[MCP] 已连接 {server_name}，发现 {len(result.tools)} 个工具")
+        print(f"[MCP] 已连接 {server_name}，发现 {len(result.tools)} 个工具:")
+        for tool in result.tools:
+            print(f"  - {server_name}__{tool.name}: {tool.description or '无描述'}")
 
     async def _cache_tools(self) -> None:
         """缓存所有 MCP Server 的工具 schema"""
