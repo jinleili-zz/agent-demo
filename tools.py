@@ -267,6 +267,24 @@ def get_weather(city: str, country: str = "") -> str:
         return f"查询天气失败: {e}"
 
 
+@register_tool(description="发送邮件（模拟）")
+def send_email(to: str, subject: str, body: str) -> str:
+    """模拟发送邮件，仅打印日志并返回成功
+
+    Args:
+        to: 收件人邮箱地址
+        subject: 邮件主题
+        body: 邮件正文
+
+    Returns:
+        操作结果
+    """
+    print(f"[send_email] 模拟发送邮件 → {to}")
+    print(f"  主题: {subject}")
+    print(f"  正文: {body}")
+    return f"邮件已成功发送至 {to}"
+
+
 @register_tool(description="写入文件内容")
 def write_file(path: str, content: str) -> str:
     """写入文件内容

@@ -181,29 +181,29 @@ class Agent:
             {"role": "user", "content": user_input}
         ]
 
-        # 第一次请求，带上工具
-        response = self._call_api(messages, self.tools_schema)
-
-        # 获取 assistant 的消息
-        assistant_message = response["choices"][0]["message"]
-
-        # 检查是否有工具调用
-        if "tool_calls" in assistant_message and assistant_message["tool_calls"]:
-            # 添加 assistant 的消息到消息列表
-            messages.append({
-                "role": "assistant",
-                "content": assistant_message.get("content", ""),
-                "tool_calls": assistant_message["tool_calls"]
-            })
-
-            # 处理工具调用
-            self._handle_tool_calls(assistant_message["tool_calls"], messages)
-
-            # 第二次请求，不带工具，获取最终回复
-            response = self._call_api(messages)
+        max_rounds = 10
+        for _ in range(max_rounds):
+            response = self._call_api(messages, self.tools_schema)
             assistant_message = response["choices"][0]["message"]
 
-        return assistant_message.get("content", "")
+            # 检查是否有工具调用
+            if "tool_calls" in assistant_message and assistant_message["tool_calls"]:
+                # 添加 assistant 的消息到消息列表
+                messages.append({
+                    "role": "assistant",
+                    "content": assistant_message.get("content", ""),
+                    "tool_calls": assistant_message["tool_calls"]
+                })
+
+                # 处理工具调用
+                self._handle_tool_calls(assistant_message["tool_calls"], messages)
+            else:
+                # 没有工具调用，返回最终文本回复
+                return assistant_message.get("content", "")
+
+        # 超过最大轮次限制，做一次不带工具的调用获取最终回复
+        response = self._call_api(messages)
+        return response["choices"][0]["message"].get("content", "")
 
     def cleanup(self) -> None:
         """清理资源"""
