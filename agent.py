@@ -9,6 +9,7 @@ from config import Config
 from logger import AgentLogger
 from tools import get_tools_schema, execute_tool, _geocode
 from mcp_client import MCPClientManager
+from skills import SkillManager
 
 
 class Agent:
@@ -23,6 +24,11 @@ class Agent:
         self.config = config
         self.logger = AgentLogger(config.log_dir)
         self.tools_schema = get_tools_schema()
+
+        # 加载 skills
+        self.skill_manager = SkillManager()
+        self.skill_manager.start()
+
         self.mcp_manager: Optional[MCPClientManager] = None
 
         # 初始化 MCP 客户端
@@ -176,8 +182,14 @@ class Agent:
         Returns:
             模型回复文本
         """
+        system_prompt = "你是一个有帮助的助手，可以使用工具帮助用户完成任务。"
+
+        active = self.skill_manager.get_active_instructions(user_input)
+        if active:
+            system_prompt += "\n\n" + active
+
         messages = [
-            {"role": "system", "content": "你是一个有帮助的助手，可以使用工具帮助用户完成任务。"},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_input}
         ]
 
