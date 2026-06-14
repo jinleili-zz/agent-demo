@@ -39,6 +39,20 @@ class SkillManager:
             except Exception as e:
                 print(f"[Skill] 跳过 {filename}: {e}")
 
+    def get_active_instructions(self, user_input: str) -> str:
+        """返回命中 skill 的正文拼接（按 name 字典序），无命中返回空串。"""
+        lowered = user_input.lower()
+        matched = [
+            s for s in self._skills
+            if any(t.lower() in lowered for t in s.triggers)
+        ]
+        matched.sort(key=lambda s: s.name)
+
+        if matched:
+            print(f"[Skill] active: {[s.name for s in matched]}")
+
+        return "\n\n".join(s.body for s in matched)
+
     @staticmethod
     def _parse_file(filepath: str) -> Skill:
         with open(filepath, "r", encoding="utf-8") as f:
