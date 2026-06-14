@@ -50,3 +50,39 @@ def test_multiple_matches_sorted_by_name(tmp_path):
     result = mgr.get_active_instructions("common trigger")
     # alpha 字典序在 zeta 之前 → A 正文必须先出现
     assert result.index("A 正文") < result.index("Z 正文")
+
+
+def test_skip_malformed_files(tmp_path):
+    # 1) 缺 frontmatter
+    (tmp_path / "no_frontmatter.md").write_text("纯文本没有 frontmatter", encoding="utf-8")
+    # 2) frontmatter 未闭合
+    (tmp_path / "unclosed.md").write_text("---\nname: x\nbody", encoding="utf-8")
+    # 3) YAML 语法错
+    (tmp_path / "bad_yaml.md").write_text("---\nname: x\ntriggers: [unclosed\n---\nbody", encoding="utf-8")
+    # 4) 缺 name 字段
+    (tmp_path / "no_name.md").write_text("---\ntriggers: [foo]\n---\nbody", encoding="utf-8")
+    # 5) 缺 triggers 字段
+    (tmp_path / "no_triggers.md").write_text("---\nname: x\n---\nbody", encoding="utf-8")
+    # 合法文件应正常加载
+    _write_skill(tmp_path, "good.md", "good", "[foo]", "good body")
+
+    mgr = SkillManager(skills_dir=str(tmp_path))
+    mgr.start()  # 不抛
+
+    assert len(mgr._skills) == 1
+    assert mgr._skills[0].name == "good"
+
+
+def test_empty_skills_dir(tmp_path):
+    mgr = SkillManager(skills_dir=str(tmp_path))
+    mgr.start()  # 不抛
+    assert mgr._skills == []
+    assert mgr.get_active_instructions("anything") == ""
+
+
+def test_missing_skills_dir(tmp_path):
+    missing = str(tmp_path / "does_not_exist")
+    mgr = SkillManager(skills_dir=missing)
+    mgr.start()  # 不抛
+    assert mgr._skills == []
+    assert mgr.get_active_instructions("anything") == ""
